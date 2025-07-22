@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Church Timer (Polling)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the mobile display */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0A0A0A; /* Deep dark background */
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            transition: background-color 0.5s ease-in-out; /* Smooth transition for background changes */
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100vh; /* Take full viewport height */
+            text-align: center;
+            padding: 1rem; /* Add some padding */
+            box-sizing: border-box; /* Include padding in element's total width and height */
+        }
+
+        .speaker-info {
+            font-weight: bold;
+            color: white;
+            margin-bottom: 0.5rem;
+            line-height: 1.2;
+            word-wrap: break-word; /* Ensure long text wraps */
+            max-width: 90%; /* Prevent overflow on very long names */
+            text-shadow: 0px 0px 10px rgba(0, 255, 153, 0.3); /* Subtle glow for speaker info */
+            transition: color 0.3s ease-in-out, text-shadow 0.3s ease-in-out;
+        }
+
+        .speaker-name {
+            font-size: 10vw; /* Responsive font size */
+            letter-spacing: 0.1em; /* Add some spacing */
+        }
+
+        .separator {
+            font-size: 6vw;
+            margin-top: -1vw; /* Adjust spacing */
+            margin-bottom: -1vw; /* Adjust spacing */
+            color: #00FF99; /* Green separator */
+            text-shadow: 0px 0px 8px rgba(0, 255, 153, 0.5); /* Stronger glow for separator */
+        }
+
+        .speaker-segment {
+            font-size: 7vw;
+            margin-bottom: 2rem;
+            letter-spacing: 0.08em;
+        }
+
+        .timer-display {
+            font-size: 35vw; /* Very large for primary display */
+            font-weight: bold;
+            color: #00FF99; /* Initial timer color (bright green) */
+            line-height: 1; /* Tightly packed numbers */
+            flex-grow: 1; /* Allow timer to take up available space */
+            display: flex; /* Use flex to center content vertically within its space */
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            text-shadow: 0px 0px 20px rgba(0, 255, 153, 0.7); /* Strong glow for timer */
+            transition: color 0.3s ease-in-out, text-shadow 0.3s ease-in-out;
+        }
+
+        .warning-message {
+            font-size: 8vw; /* Large enough for warnings */
+            font-weight: bold;
+            color: yellow; /* Warning text color */
+            min-height: 10vw; /* Ensure space for text even when empty */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            margin-top: 1rem; /* Space below timer */
+            text-shadow: 0px 0px 15px rgba(255, 255, 0, 0.8); /* Strong glow for warning */
+            transition: color 0.3s ease-in-out, text-shadow 0.3s ease-in-out;
+        }
+
+        /* Blinking animation for background */
+        @keyframes blink-bg {
+            0%, 49% { background-color: #E74C3C; } /* Red */
+            50%, 100% { background-color: #0A0A0A; } /* Dark background */
+        }
+
+        .blinking-bg {
+            animation: blink-bg 1s step-end infinite;
+        }
+
+        /* Connection form styles */
+        .connection-form {
+            background-color: #1E1E1E;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); /* More prominent shadow */
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            border: 1px solid #3A3A3A;
+        }
+
+        .connection-form input {
+            width: calc(100% - 1rem);
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #555555; /* Slightly lighter border */
+            background-color: #3A3A3A;
+            color: #D4D4D4;
+            font-size: 1.1rem;
+        }
+
+        .connection-form button {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            background-color: #17a2b8;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .connection-form button:hover {
+            background-color: #138496;
+            transform: translateY(-2px);
+        }
+        .connection-form button:active {
+            transform: translateY(0);
+        }
+
+        .connection-status {
+            margin-top: 1rem;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection Form -->
+    <div id="connection-screen" class="connection-form">
+        <h2 class="text-xl font-bold mb-4 text-white">Connect to Timer</h2>
+        <input type="text" id="ip-input" placeholder="Desktop IP Address (e.g., 192.168.1.100)">
+        <input type="text" id="port-input" placeholder="Port (e.g., 8000)" value="8000">
+        <button id="connect-button">Connect</button>
+        <p id="connection-status" class="connection-status text-red-500">Disconnected</p>
+        <p class="text-sm text-gray-400 mt-4">Ensure your desktop app is running and both devices are on the same local network.</p>
+    </div>
+
+    <!-- Timer Display (Hidden until connected) -->
+    <div id="timer-display-screen" class="container hidden">
+        <div id="speaker-name" class="speaker-info speaker-name">SPEAKER NAME</div>
+        <div id="separator" class="speaker-info separator">—</div>
+        <div id="speaker-segment" class="speaker-info speaker-segment">SEGMENT / TOPIC</div>
+        <div id="timer-value" class="timer-display">00:00</div>
+        <div id="warning-message" class="warning-message"></div>
+    </div>
+
+    <script>
+        const connectionScreen = document.getElementById('connection-screen');
+        const timerDisplayScreen = document.getElementById('timer-display-screen');
+        const ipInput = document.getElementById('ip-input');
+        const portInput = document.getElementById('port-input');
+        const connectButton = document.getElementById('connect-button');
+        const connectionStatus = document.getElementById('connection-status');
+
+        const speakerNameEl = document.getElementById('speaker-name');
+        const separatorEl = document.getElementById('separator');
+        const speakerSegmentEl = document.getElementById('speaker-segment');
+        const timerValueEl = document.getElementById('timer-value');
+        const warningMessageEl = document.getElementById('warning-message');
+
+        let fetchInterval;
+        let isBlinking = false; // Track blinking state for the mobile client
+
+        function startPolling() {
+            const ip = ipInput.value.trim();
+            const port = portInput.value.trim();
+
+            if (!ip || !port) {
+                connectionStatus.textContent = "Please enter IP and Port.";
+                connectionStatus.className = "connection-status text-red-500";
+                return;
+            }
+
+            const apiUrl = `http://${ip}:${port}/timer_state`;
+            connectionStatus.textContent = `Connecting to ${apiUrl}...`;
+            connectionStatus.className = "connection-status text-yellow-500";
+            connectButton.disabled = true;
+
+            // Clear any existing interval
+            if (fetchInterval) {
+                clearInterval(fetchInterval);
+            }
+
+            // Initial fetch
+            fetchTimerData(apiUrl);
+
+            // Set up polling interval (e.g., every 500ms for responsiveness)
+            fetchInterval = setInterval(() => fetchTimerData(apiUrl), 500);
+        }
+
+        async function fetchTimerData(apiUrl) {
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                console.log('Received:', data);
+                updateTimerDisplay(data);
+
+                connectionStatus.textContent = "Connected!";
+                connectionStatus.className = "connection-status text-green-500";
+                connectionScreen.classList.add('hidden');
+                timerDisplayScreen.classList.remove('hidden');
+                connectButton.disabled = false;
+
+            } catch (error) {
+                console.error('Fetch Error:', error);
+                connectionStatus.textContent = "Connection failed. Check server/network. Retrying..."; // More informative message
+                connectionStatus.className = "connection-status text-red-500";
+                timerDisplayScreen.classList.add('hidden');
+                connectionScreen.classList.remove('hidden');
+                connectButton.disabled = false; // Re-enable button immediately on fetch error
+                
+                // Stop polling on error, will be restarted by connect button or auto-retry
+                if (fetchInterval) {
+                    clearInterval(fetchInterval);
+                    fetchInterval = null;
+                }
+                // Optionally, automatically re-attempt connection after a delay
+                setTimeout(startPolling, 3000); 
+            }
+        }
+
+        function updateTimerDisplay(data) {
+            speakerNameEl.textContent = data.speaker_name.toUpperCase();
+            speakerSegmentEl.textContent = data.speaker_segment.toUpperCase();
+            timerValueEl.textContent = data.time_text;
+
+            // Update colors based on warning/past_zero state
+            const isWarningOrPastZero = data.is_warning || data.is_past_zero;
+
+            // Set main timer number color
+            timerValueEl.style.color = isWarningOrPastZero ? 'white' : '#00FF99';
+            timerValueEl.style.textShadow = isWarningOrPastZero ? '0px 0px 20px rgba(255, 255, 255, 0.8)' : '0px 0px 20px rgba(0, 255, 153, 0.7)';
+
+
+            // Set speaker info colors
+            speakerNameEl.style.color = isWarningOrPastZero ? 'white' : 'white';
+            separatorEl.style.color = isWarningOrPastZero ? 'white' : '#00FF99';
+            speakerSegmentEl.style.color = isWarningOrPastZero ? 'white' : 'white';
+
+            // Adjust text shadows for speaker info based on warning state
+            speakerNameEl.style.textShadow = isWarningOrPastZero ? '0px 0px 10px rgba(255, 255, 255, 0.5)' : '0px 0px 10px rgba(0, 255, 153, 0.3)';
+            separatorEl.style.textShadow = isWarningOrPastZero ? '0px 0px 8px rgba(255, 255, 255, 0.7)' : '0px 0px 8px rgba(0, 255, 153, 0.5)';
+            speakerSegmentEl.style.textShadow = isWarningOrPastZero ? '0px 0px 10px rgba(255, 255, 255, 0.5)' : '0px 0px 10px rgba(0, 255, 153, 0.3)';
+
+
+            // Handle warning message and blinking
+            if (data.is_past_zero) {
+                warningMessageEl.textContent = "TIME'S UP!";
+                warningMessageEl.style.color = "yellow"; 
+                warningMessageEl.style.textShadow = '0px 0px 15px rgba(255, 255, 0, 0.8)';
+                startBlinking();
+            } else if (data.is_warning) {
+                warningMessageEl.textContent = "ROUND UP!";
+                warningMessageEl.style.color = "yellow"; 
+                warningMessageEl.style.textShadow = '0px 0px 15px rgba(255, 255, 0, 0.8)';
+                startBlinking();
+            } else {
+                warningMessageEl.textContent = "";
+                warningMessageEl.style.color = "white"; 
+                warningMessageEl.style.textShadow = 'none';
+                stopBlinking();
+            }
+        }
+
+        function startBlinking() {
+            if (!isBlinking) {
+                document.body.classList.add('blinking-bg'); // Apply blinking to body for full background effect
+                isBlinking = true;
+            }
+        }
+
+        function stopBlinking() {
+            if (isBlinking) {
+                document.body.classList.remove('blinking-bg');
+                document.body.style.backgroundColor = '#0A0A0A'; // Reset to normal background
+                isBlinking = false;
+            }
+        }
+
+        connectButton.addEventListener('click', startPolling);
+
+        // Optional: Auto-connect if IP/Port are already filled (e.g., from a previous session or query params)
+        if (ipInput.value && portInput.value) {
+            startPolling();
+        }
+    </script>
+</body>
+</html>
